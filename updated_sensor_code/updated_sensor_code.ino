@@ -1,18 +1,15 @@
-//Libraries 
-
-#include <DHT.h>; 
-#include <Wire.h> 
-// #include <Adafruit_BMP085.h> 
+//Libraries
+#include <DHT.h>
+#include <Wire.h>
 #include <Adafruit_BMP280.h>
-#include <BH1750.h> 
-#include <i2cdetect.h> 
+#include <BH1750.h>
+#include <i2cdetect.h>
 
-//Constants 
-
+//Constants
 #define DHTPIN 3     // what pin we're connected to with the temp/hum sensor
-#define DHTTYPE DHT22   // DHT 22  (AM2302) 
-#define seaLevelPressure_hPa 1013.25  
-#define BMP085_I2CADDR 0x77 
+#define DHTTYPE DHT22   // DHT 22  (AM2302)
+#define seaLevelPressure_hPa 1013.25
+#define BMP085_I2CADDR 0x77
 #define BMP280_ADDRESS 0x76
 
 #define PHOTO_PIN A0
@@ -24,13 +21,13 @@ BH1750 lightMeter(0x23);
 
 //Variables 
 int chk;
-const int MPU = 0x68; // MPU6050 I2C address 
-float AccX, AccY, AccZ; 
-float GyroX, GyroY, GyroZ; 
-float accAngleX, accAngleY, gyroAngleX, gyroAngleY, gyroAngleZ; 
-float roll, pitch, yaw; 
+const int MPU = 0x68; // MPU6050 I2C address
+float AccX, AccY, AccZ;
+float GyroX, GyroY, GyroZ;
+float accAngleX, accAngleY, gyroAngleX, gyroAngleY, gyroAngleZ;
+float roll, pitch, yaw;
 float AccErrorX, AccErrorY, GyroErrorX, GyroErrorY, GyroErrorZ;
-float elapsedTime, currentTime, previousTime; 
+float elapsedTime, currentTime, previousTime;
 
 // Function prototypes
 void I2Cdetector();
@@ -44,7 +41,7 @@ void sendOnePDReading();
 
 void setup() 
 { 
-  Serial.begin(9600); 
+  Serial.begin(57600); 
   while (!Serial);   // wait for serial monitor
   Wire.begin(); 
   
@@ -73,13 +70,28 @@ void loop()
   float temp2 = bmp.readTemperature(); // stores bmp temp
   float lux = lightMeter.readLightLevel(); // store light value
   readGyro();
-
-  int sensorValue = analogRead(sensorPin); // photodiode
-
-  Serial.println(sprintf(
-    "Time: %f, Humidity: %f%%, Temp:%fC, Pressure: %fPa,  Altitude: %fm,  Temp (BMP) = %fC, Light: %flx, (Roll: %f, Pitch: %f, Yaw: %f) deg",   // no \n since println adds one
-    currentTime,    hum,       temp,     pa,              alt,            temp2,            lux,           roll,    pitch,     yaw
-  ))
+  
+  Serial.print("Time: ");
+  Serial.print(currentTime);
+  Serial.print(", Humidity: ");
+  Serial.print(hum);
+  Serial.print("%, Temp:");
+  Serial.print(temp);
+  Serial.print("C, Pressure: ");
+  Serial.print(pa);
+  Serial.print("Pa, Altitude: ");
+  Serial.print(alt);
+  Serial.print("m, Temp (BMP): ");
+  Serial.print(temp2);
+  Serial.print("C, Light: ");
+  Serial.print(lux);
+  Serial.print("lx, (Roll: ");
+  Serial.print(roll);
+  Serial.print(", Pitch: ");
+  Serial.print(pitch);
+  Serial.print(", Yaw: ");
+  Serial.print(yaw);
+  Serial.println(") deg");
 
   delay(1000); //Delay 1 sec. 
 } 
@@ -186,7 +198,7 @@ void calculate_IMU_error() {
   // Note that we should place the IMU flat in order to get the proper values, so that we then can the correct values 
   // Read accelerometer values 200 times 
 
-  while (for c=0; c < 200; c++) { 
+  for(int c=0; c < 200; c++) { 
     Wire.beginTransmission(MPU); 
 
     Wire.write(0x3B); 
@@ -210,7 +222,7 @@ void calculate_IMU_error() {
   AccErrorY = AccErrorY / 200; 
 
   // Read gyro values 200 times
-  while (for c=0; c < 200; c++) { 
+  for (int c=0; c < 200; c++) { 
     Wire.beginTransmission(MPU); 
 
     Wire.write(0x43); 
