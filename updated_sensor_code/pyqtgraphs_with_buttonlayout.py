@@ -19,19 +19,17 @@ NUM_BYTES_PER_READING = 4
 ARDUINO_ADC_MAX_VOLTAGE = 5
 ARDUINO_ADC_MAX_INT = 2 ** 10  # changes depending on board, but defaults to 10 bits on every board
 
-
 def read_values(adno: serial.Serial):
     m = None
     counter = 0
     while m == None:
         text_output = adno.readline()
         try:
-            text_output = text_output.decode(
-                "ASCII")  # wait for arduinos to send a line of text over serial, then read it in
+            text_output = text_output.decode("ASCII")  # wait for arduinos to send a line of text over serial, then read it in
         except:
             split_string = b'Temp'
-            text_output = split_string + test_str.split(split_string, 1)[1]
             try:
+                text_output = split_string + text_output.split(split_string, 1)[1]
                 text_output = text_output.decode("ASCII")
             except:
                 counter += 1
@@ -59,9 +57,147 @@ def convert_serial_to_pd_reading(bytes_in: bytes) -> tuple[float, float]:
 
     return time_since_previous, voltage_on_pin
 
+class PlotWindowDynamicTemp(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        # Initialize plot widget, set it to the center, and set the background color to be white
+        self.plot_graph = pg.PlotWidget()
+        self.setCentralWidget(self.plot_graph)
+        self.plot_graph.setBackground("w")
 
-with serial.Serial(port=ARDUINO_SERIAL_PORT, baudrate=ARDUINO_BAUD_RATE,
-                   timeout=TIMEOUT) as arduino:  # implicitly calls arduino.close() afterwards
+        # set the color and width of the plot line
+        pen = pg.mkPen(color=(255, 0, 0), width=5)  # (r, g, b), i.e., (0, 0, 255) = blue, so first plot is set to red
+
+        # set the title name, color, and size of the plot
+        self.plot_graph.setTitle("Temperature vs Time", color='r', size='20pt')
+        # styles = {"color": "red", "font-size": "18px"}
+
+        # Axis Titles
+        self.plot_graph.setLabel("left", "Temperature (ºC)", color="red")
+        self.plot_graph.setLabel("bottom", "Time (sec)", color="red")
+
+        # Legend and Gridlines
+        self.plot_graph.addLegend()
+        self.plot_graph.showGrid(x=True, y=True)
+
+        # Arrays to store/update data readings from the two temperature sensors
+        self.time = []
+        self.temperature1 = []
+        self.temperature2 = []
+
+        # this instruction will plot data from the 1st temperature sensor
+        self.line1 = self.plot_graph.plot(
+            self.time,
+            self.temperature2,
+            name="Temperature Sensor",  # Label for the legend
+            pen=pen,
+            symbol='o',
+            symbolSize=5,
+            symbolBrush='r'
+        )
+        pen = pg.mkPen(color=(0, 0, 255), width=5)  # (r, g, b) – set the second plot to blue
+
+        # this will plot the second
+        self.line2 = self.plot_graph.plot(
+            self.time,
+            self.temperature2,
+            name="Temperature Sensor (BMP)",  # Label for the legend
+            pen=pen,
+            symbol='o',
+            symbolSize=5,
+            symbolBrush='r'
+        )
+
+    def update_plot_temperatures(self, sensor_time, temp1, temp2):
+        self.time.append(sensor_time)
+        self.temperature1.append(temp1)
+        self.temperature2.append(temp2)  # 2nd temperature value)
+        # Update plot with new data
+        self.line1.setData(self.time, self.temperature1)  # update plot for temperature 1
+        self.line2.setData(self.time, self.temperature2)  # update plot for temperature 2
+
+class PlotWindowOptical(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        # initialize graph, center it, and set background colour
+        self.plot_graph = pg.PlotWidget()
+        self.setCentralWidget(self.plot_graph)
+        self.plot_graph.setBackground("w")
+        # set colour and thickness of plot line
+        pen = pg.mkPen(color=(255, 255, 0), width=5)  # (r, g, b), i.e., (0, 255, 0) = green
+        # set graph title, and axis titles
+        self.plot_graph.setTitle("Voltage vs Time", color='k', size='20pt')
+        self.plot_graph.setLabel('left', 'Voltage (V)', color='black')
+        self.plot_graph.setLabel('bottom', 'Time (s)', color='black')
+
+        # Legend and Gridlines
+        self.plot_graph.addLegend()
+        self.plot_graph.showGrid(x=True, y=True)
+
+        self.time = []
+        self.voltage = []
+
+        self.line = self.plot_graph.plot(
+            self.time,
+            self.voltage,
+            name="Optical Path Reading",  # Label for the legend
+            pen=pen,
+            symbol='o',
+            symbolSize=5,
+            symbolBrush='b'
+        )
+
+    def update_plot_optical(self, times_in, voltages_in):
+        # Update plot data for temperature
+        # self.time.append(self.time[-1] + 1) if self.time else self.time.append(0)
+        self.time.append(times_in)
+        self.voltage.append(voltages_in)
+
+        # Update plot with new data
+        self.line.setData(self.time, self.voltage)
+
+class MainWindow(QMainWindow):  #this main window should show all the buttons that can be pressed for the different plots
+    # *rn there is only buttons for the Temperature and Photodiode plots
+    arduino = serial.Serial(port=ARDUINO_SERIAL_PORT, baudrate=ARDUINO_BAUD_RATE, timeout=TIMEOUT)
+    PD_time = 0
+
+    def __init__(self):
+        super().__init__()
+        self.temperature_window = PlotWindowDynamicTemp()
+        self.optical_window = PlotWindowOptical()
+
+        self.setWindowTitle('Buttons')
+
+        main_layout = QVBoxLayout()
+        button_temp = QPushButton("Temperature vs. Time")
+        button_temp.clicked.connect(self.toggle_temperature_window)
+        main_layout.addWidget(button_temp)
+
+        button_opt = QPushButton("Voltage vs. Time")
+        button_opt.clicked.connect(self.toggle_optical_window)
+        main_layout.addWidget(button_opt)
+
+    def toggle_temperature_window(self, checked):
+        if self.temperature_window.isVisible():
+            self.temperature_window.hide()
+        else:
+            self.temperature_window.show()
+
+    def toggle_optical_window(self, checked):
+        if self.optical_window.isVisible():
+            self.optical_window.hide()
+        else:
+            self.optical_window.show()
+
+# beginning of program
+app = QApplication(sys.argv)
+w = MainWindow()
+w.show()
+app.exec()
+
+
+
+with serial.Serial(port=ARDUINO_SERIAL_PORT, baudrate=ARDUINO_BAUD_RATE, timeout=TIMEOUT) as arduino:  # implicitly calls arduino.close() afterwards
     PD_time = 0
     while True:
         sensor_time, humidity, temperature, pressure, altitude, temp2, light, roll, pitch, yaw = read_values(arduino)
@@ -77,156 +213,13 @@ with serial.Serial(port=ARDUINO_SERIAL_PORT, baudrate=ARDUINO_BAUD_RATE,
         print(f"Average PD time: {np.average(pd_times)}; average PD value: {np.average(pd_voltages)}")
         print(
             f"Time: {sensor_time}, Humidity: {humidity}%, Temp:{temperature}C, Pressure: {pressure}Pa,  Altitude: {altitude}m,  Temp (BMP) = {temp2}C, Light: {light}lx, (Roll: {roll}, Pitch: {pitch}, Yaw: {yaw}) deg")
-        # Add to graph here
 
-        class PlotWindowDynamicTemp(QMainWindow):
-            def __init__(self):
-                super().__init__()
-                # Initialize plot widget, set it to the center, and set the background color to be white
-                self.plot_graph = pg.PlotWidget()
-                self.setCentralWidget(self.plot_graph)
-                self.plot_graph.setBackground("w")
+        w.optical_window.update_plot_optical(pd_times, pd_voltages)
+        w.temperature_window.update_plot_temperatures(sensor_time, temperature, temp2)
 
-                # set the color and width of the plot line
-                pen = pg.mkPen(color=(255, 0, 0), width=5)  # (r, g, b), i.e., (0, 0, 255) = blue, so first plot is set to red
 
-                # set the title name, color, and size of the plot
-                self.plot_graph.setTitle("Temperature vs Time", color='r', size='20pt')
-                # styles = {"color": "red", "font-size": "18px"}
-
-                # Axis Titles
-                self.plot_graph.setLabel("left", "Temperature (ºC)", color="red")
-                self.plot_graph.setLabel("bottom", "Time (sec)", color="red")
-
-                # Legend and Gridlines
-                self.plot_graph.addLegend()
-                self.plot_graph.showGrid(x=True, y=True)
-
-                # Arrays to store/update data readings from the two temperature sensors
-                self.time = []
-                self.temperature1 = []
-                self.temperature2 = []
-
-                # this instruction will plot data from the 1st temperature sensor
-                self.line1 = self.plot_graph.plot(
-                    self.time,
-                    self.temperature2,
-                    name="Temperature Sensor",  # Label for the legend
-                    pen=pen,
-                    symbol='o',
-                    symbolSize=5,
-                    symbolBrush='r'
-                )
-                pen = pg.mkPen(color=(0, 0, 255), width=5)  # (r, g, b) – set the second plot to blue
-
-                # this will plot the second
-                self.line2 = self.plot_graph.plot(
-                    self.time,
-                    self.temperature2,
-                    name="Temperature Sensor (BMP)",  # Label for the legend
-                    pen=pen,
-                    symbol='o',
-                    symbolSize=5,
-                    symbolBrush='r'
-                )
-
-                # 1-second delay, we call the QTimer
-                self.timer = QtCore.QTimer()
-                self.timer.setInterval(1000)  # delay of 1000 milliseconds (1 second)
-                self.timer.timeout.connect(self.update_plot)  # once the timer times out, call 'update_plot' fn
-                self.timer.start()
-
-            def update_plot(self):
-                current_time_inner, humidity_inner, temperature_inner, pressure_inner, altitude1_inner, temp2_inner, light_inner, roll_inner, pitch_inner, yaw_inner = read_values()
-                current_time_inner = current_time_inner * 1e-3
-
-                self.time.append(current_time_inner)
-                self.temperature1.append(temperature_inner)
-                self.temperature2.append(temp2_inner)  # 2nd temperature value)
-                # Update plot with new data
-                self.line1.setData(self.time, self.temperature1)  # update plot for temperature 1
-                self.line2.setData(self.time, self.temperature2)  # update plot for temperature 2
-
-        class PlotWindowOptical(QMainWindow):
-            def __init__(self):
-                super().__init__()
-                # initialize graph, center it, and set background colour
-                self.plot_graph = pg.PlotWidget()
-                self.setCentralWidget(self.plot_graph)
-                self.plot_graph.setBackground("w")
-                # set colour and thickness of plot line
-                pen = pg.mkPen(color=(255, 255, 0), width=5)  # (r, g, b), i.e., (0, 255, 0) = green
-                # set graph title, and axis titles
-                self.plot_graph.setTitle("Voltage vs Time", color='k', size='20pt')
-                self.plot_graph.setLabel('left', 'Voltage (V)', color='black')
-                self.plot_graph.setLabel('bottom', 'Time (s)', color='black')
-
-                # Legend and Gridlines
-                self.plot_graph.addLegend()
-                self.plot_graph.showGrid(x=True, y=True)
-
-                self.time = []
-                self.voltage = []
-
-                self.line = self.plot_graph.plot(
-                    self.time,
-                    self.voltage,
-                    name="Optical Path Reading",  # Label for the legend
-                    pen=pen,
-                    symbol='o',
-                    symbolSize=5,
-                    symbolBrush='b'
-                )
-
-                self.timer = QtCore.QTimer()
-                self.timer.setInterval(1000)  # delay of 1000 milliseconds (1 second)
-                self.timer.timeout.connect(self.update_plot_optical)  # once the timer times out, call 'update_plot' fn
-                self.timer.start()
-
-            def update_plot_optical(self):
-                # Read values from Arduino
-                time_since_previous_inner, voltage_on_pin_inner = convert_serial_to_pd_reading()
-                # print(f"Time: {time_since_previous}, Voltage: {voltage_on_pin} V")
-
-                # Update plot data for temperature
-                # self.time.append(self.time[-1] + 1) if self.time else self.time.append(0)
-                self.time.append(time_since_previous_inner)
-                self.voltage.append(voltage_on_pin_inner)
-
-                # Update plot with new data
-                self.line.setData(self.time, self.voltage)
-
-        class MainWindow(QMainWindow):  #this main window should show all the buttons that can be pressed for the different plots
-            # *rn there is only buttons for the Temperature and Photodiode plots
-            def __init__(self):
-                super().__init__()
-                self.window1 = PlotWindowDynamicTemp()
-                self.window2 = PlotWindowOptical()
-
-                self.setWindowTitle('Buttons')
-
-                l = QVBoxLayout()
-                button1 = QPushButton("Temperature vs. Time")
-                button1.clicked.connect(self.toggle_window1)
-                l.addWidget(button1)
-
-                button2 = QPushButton("Voltage vs. Time")
-                button2.clicked.connect(self.toggle_window2)
-                l.addWidget(button2)
-
-            def toggle_window1(self, checked):
-                if self.window1.isVisible():
-                    self.window1.hide()
-                else:
-                    self.window1.show()
-
-            def toggle_window2(self, checked):
-                if self.window2.isVisible():
-                    self.window2.hide()
-                else:
-                    self.window2.show()
-
-        app = QApplication(sys.argv)
-        w = MainWindow()
-        w.show()
-        app.exec()
+# static variables (https://stackoverflow.com/a/279597)
+# def myfunc():
+#   if not hasattr(myfunc, "counter"):
+#      myfunc.counter = 0  # it doesn't exist yet, so initialize it
+#   myfunc.counter += 1
