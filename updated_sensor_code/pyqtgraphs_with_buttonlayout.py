@@ -14,16 +14,18 @@ TIMEOUT = 3
 NUM_PD_READINGS_PER_CYCLE = 1000
 NUM_BYTES_PER_READING = 4
 
+POLLING_PERIOD_MS = 1000
+
 # For reading from light sensor
 ARDUINO_ADC_MAX_VOLTAGE = 5
-ARDUINO_ADC_MAX_INT = 2 ** 10  # changes depending on board, but defaults to 10 bits on every board
+ARDUINO_ADC_MAX_INT = 2 ** 10  # maximum changes depending on board, but defaults to 10 bits on every board
 
 def read_values(adno: serial.Serial):
     m = None
     counter = 0
     while m == None:
         text_output = adno.readline()
-        try:
+        try:        # to anyone who has to maintain this code later: sorry (:
             text_output = text_output.decode("ASCII")  # wait for arduinos to send a line of text over serial, then read it in
         except:
             split_string = b'Time: '
@@ -185,7 +187,7 @@ class MainWindow(QMainWindow):  #this main window should show all the buttons th
         # future = QtConcurrent.run(self.read_and_update_plots, self.arduino, self.PD_overall_time)
         # future = QtConcurrent.run(self.plots_loop)
         self.timer = QtCore.QTimer()
-        self.timer.setInterval(1000)  # delay of 1000 milliseconds (1 second)
+        self.timer.setInterval(POLLING_PERIOD_MS)
         self.timer.timeout.connect(self.read_and_update_plots)  # once the timer times out, call the 'update_plot' function
         self.timer.start()
 
