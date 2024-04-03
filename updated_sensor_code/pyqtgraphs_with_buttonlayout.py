@@ -8,7 +8,6 @@ from PyQt6 import QtCore
 import pyqtgraph as pg
 import sys
 
-
 ARDUINO_SERIAL_PORT = '/dev/ttyACM0'
 ARDUINO_BAUD_RATE = 57600
 TIMEOUT = 3
@@ -151,8 +150,8 @@ class PlotWindowOptical(QMainWindow):
     def update_plot_optical(self, times_in, voltages_in):
         # Update plot data for temperature
         # self.time.append(self.time[-1] + 1) if self.time else self.time.append(0)
-        np.append(self.time,times_in)
-        np.append(self.voltage, voltages_in)
+        self.time = np.append(self.time,times_in)
+        self.voltage = np.append(self.voltage, voltages_in)
 
         # Update plot with new data
         self.line.setData(self.time, self.voltage)
@@ -160,10 +159,11 @@ class PlotWindowOptical(QMainWindow):
 class MainWindow(QMainWindow):  #this main window should show all the buttons that can be pressed for the different plots
     # *rn there is only buttons for the Temperature and Photodiode plots
     arduino = serial.Serial(port=ARDUINO_SERIAL_PORT, baudrate=ARDUINO_BAUD_RATE, timeout=TIMEOUT)
-    PD_time = 0
+    PD_overall_time = 0
 
     def __init__(self):
         super().__init__()
+
         self.temperature_window = PlotWindowDynamicTemp()
         self.optical_window = PlotWindowOptical()
 
@@ -178,11 +178,14 @@ class MainWindow(QMainWindow):  #this main window should show all the buttons th
         button_opt.clicked.connect(self.toggle_optical_window)
         main_layout.addWidget(button_opt)
 
+        w = QWidget()
+        w.setLayout(main_layout)
+        self.setCentralWidget(w)
 
         # future = QtConcurrent.run(self.read_and_update_plots, self.arduino, self.PD_overall_time)
         # future = QtConcurrent.run(self.plots_loop)
         self.timer = QtCore.QTimer()
-        self.timer.setInterval(1500)  # delay of 1000 milliseconds (1 second)
+        self.timer.setInterval(1000)  # delay of 1000 milliseconds (1 second)
         self.timer.timeout.connect(self.read_and_update_plots)  # once the timer times out, call the 'update_plot' function
         self.timer.start()
 
@@ -205,7 +208,6 @@ class MainWindow(QMainWindow):  #this main window should show all the buttons th
 
     def read_and_update_plots(self):
         arduino = self.arduino
-        PD_overall_time = self.PD_time
         
         sensor_time, humidity, temperature, pressure, altitude, temp2, light, roll, pitch, yaw = read_values(arduino)
         sensor_time = sensor_time * 1e-3  # convert from miliseconds to seconds
@@ -215,7 +217,7 @@ class MainWindow(QMainWindow):  #this main window should show all the buttons th
         # TODO: flush serial here
         for c in range(NUM_PD_READINGS_PER_CYCLE):
             pd_delta_time, pd_voltages[c] = convert_serial_to_pd_reading(arduino.read(NUM_BYTES_PER_READING))
-            pd_times[c] = PD_overall_time = pd_delta_time + PD_overall_time
+            pd_times[c] = self.PD_overall_time = pd_delta_time + self.PD_overall_time
 
         print(f"Average PD time: {np.average(pd_times)}; average PD value: {np.average(pd_voltages)}")
         print(
@@ -226,10 +228,9 @@ class MainWindow(QMainWindow):  #this main window should show all the buttons th
 
 # beginning of program
 app = QApplication(sys.argv)
-w = MainWindow()
-w.show()
-app.exec()     
-
+window = MainWindow()
+window.show()
+app.exec()
 
 # static variables (https://stackoverflow.com/a/279597)
 # def myfunc():
