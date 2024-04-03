@@ -75,7 +75,7 @@ void loop()
   Serial.print(currentTime);
   Serial.print(", Humidity: ");
   Serial.print(hum);
-  Serial.print("%, Temp:");
+  Serial.print("%, Temp: ");
   Serial.print(temp);
   Serial.print("C, Pressure: ");
   Serial.print(pa);

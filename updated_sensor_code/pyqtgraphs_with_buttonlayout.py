@@ -27,16 +27,17 @@ def read_values(adno: serial.Serial):
         try:
             text_output = text_output.decode("ASCII")  # wait for arduinos to send a line of text over serial, then read it in
         except:
-            split_string = b'Temp'
+            split_string = b'Time: '
             try:
                 text_output = split_string + text_output.split(split_string, 1)[1]
                 text_output = text_output.decode("ASCII")
             except:
+                text_output = ""
                 counter += 1
                 if counter >= 20:
                     raise Exception('Too many attempts')
         m = re.search(
-            'Time: (?P<current_time>[\+,\-,\d,\.]+), Humidity: (?P<humidity>[\+,\-,\d,\.]+)%, Temp:(?P<temperature>[\+,\-,\d,\.]+)C, Pressure: (?P<pressure>[\+,\-,\d,\.]+)Pa, Altitude: (?P<altitude>[\+,\-,\d,\.]+)m, Temp \(BMP\): (?P<temp2>[\+,\-,\d,\.]+)C, Light: (?P<light>[\+,\-,\d,\.]+)lx, \(Roll: (?P<roll>[\+,\-,\d,\.]+), Pitch: (?P<pitch>[\+,\-,\d,\.]+), Yaw: (?P<yaw>[\+,\-,\d,\.]+)\) deg',
+            'Time: (?P<current_time>[\+,\-,\d,\.,nan]+), Humidity: (?P<humidity>[\+,\-,\d,\.,nan]+)%, Temp: (?P<temperature>[\+,\-,\d,\.,nan]+)C, Pressure: (?P<pressure>[\+,\-,\d,\.,nan]+)Pa, Altitude: (?P<altitude>[\+,\-,\d,\.,nan]+)m, Temp \(BMP\): (?P<temp2>[\+,\-,\d,\.,nan]+)C, Light: (?P<light>[\+,\-,\d,\.,nan]+)lx, \(Roll: (?P<roll>[\+,\-,\d,\.,nan]+), Pitch: (?P<pitch>[\+,\-,\d,\.,nan]+), Yaw: (?P<yaw>[\+,\-,\d,\.]+)\) deg',
             text_output)
     if m:
         (current_time, humidity, temperature, pressure, altitude, temp2, light, roll, pitch, yaw) = [float(g) for g in
@@ -134,8 +135,8 @@ class PlotWindowOptical(QMainWindow):
         self.plot_graph.addLegend()
         self.plot_graph.showGrid(x=True, y=True)
 
-        self.time = []
-        self.voltage = []
+        self.time = np.empty(0,'f')
+        self.voltage = np.empty(0,'f')
 
         self.line = self.plot_graph.plot(
             self.time,
@@ -150,8 +151,8 @@ class PlotWindowOptical(QMainWindow):
     def update_plot_optical(self, times_in, voltages_in):
         # Update plot data for temperature
         # self.time.append(self.time[-1] + 1) if self.time else self.time.append(0)
-        self.time.append(times_in)
-        self.voltage.append(voltages_in)
+        np.append(self.time,times_in)
+        np.append(self.voltage, voltages_in)
 
         # Update plot with new data
         self.line.setData(self.time, self.voltage)
@@ -177,6 +178,14 @@ class MainWindow(QMainWindow):  #this main window should show all the buttons th
         button_opt.clicked.connect(self.toggle_optical_window)
         main_layout.addWidget(button_opt)
 
+
+        # future = QtConcurrent.run(self.read_and_update_plots, self.arduino, self.PD_overall_time)
+        # future = QtConcurrent.run(self.plots_loop)
+        self.timer = QtCore.QTimer()
+        self.timer.setInterval(1500)  # delay of 1000 milliseconds (1 second)
+        self.timer.timeout.connect(self.read_and_update_plots)  # once the timer times out, call the 'update_plot' function
+        self.timer.start()
+
     def toggle_temperature_window(self, checked):
         if self.temperature_window.isVisible():
             self.temperature_window.hide()
@@ -189,33 +198,37 @@ class MainWindow(QMainWindow):  #this main window should show all the buttons th
         else:
             self.optical_window.show()
 
-# beginning of program
-app = QApplication(sys.argv)
-w = MainWindow()
-w.show()
-app.exec()
+    # def plots_loop(self):
+    #     with serial.Serial(port=ARDUINO_SERIAL_PORT, baudrate=ARDUINO_BAUD_RATE, timeout=TIMEOUT) as arduino:
+    #         PD_time = 0
+    #         self.read_and_update_plots(arduino, PD_time)
 
-
-
-with serial.Serial(port=ARDUINO_SERIAL_PORT, baudrate=ARDUINO_BAUD_RATE, timeout=TIMEOUT) as arduino:  # implicitly calls arduino.close() afterwards
-    PD_time = 0
-    while True:
+    def read_and_update_plots(self):
+        arduino = self.arduino
+        PD_overall_time = self.PD_time
+        
         sensor_time, humidity, temperature, pressure, altitude, temp2, light, roll, pitch, yaw = read_values(arduino)
         sensor_time = sensor_time * 1e-3  # convert from miliseconds to seconds
 
         pd_times = np.empty(NUM_PD_READINGS_PER_CYCLE, 'f')
         pd_voltages = np.empty(NUM_PD_READINGS_PER_CYCLE, 'f')
-        # TODO: flush serial and then wait for arduino to confirm that it's on the same page
+        # TODO: flush serial here
         for c in range(NUM_PD_READINGS_PER_CYCLE):
-            pd_time, pd_voltages[c] = convert_serial_to_pd_reading(arduino.read(NUM_BYTES_PER_READING))
-            pd_times[c] = PD_time = pd_time + PD_time
+            pd_delta_time, pd_voltages[c] = convert_serial_to_pd_reading(arduino.read(NUM_BYTES_PER_READING))
+            pd_times[c] = PD_overall_time = pd_delta_time + PD_overall_time
 
         print(f"Average PD time: {np.average(pd_times)}; average PD value: {np.average(pd_voltages)}")
         print(
             f"Time: {sensor_time}, Humidity: {humidity}%, Temp:{temperature}C, Pressure: {pressure}Pa,  Altitude: {altitude}m,  Temp (BMP) = {temp2}C, Light: {light}lx, (Roll: {roll}, Pitch: {pitch}, Yaw: {yaw}) deg")
 
-        w.optical_window.update_plot_optical(pd_times, pd_voltages)
-        w.temperature_window.update_plot_temperatures(sensor_time, temperature, temp2)
+        self.optical_window.update_plot_optical(pd_times, pd_voltages)
+        self.temperature_window.update_plot_temperatures(sensor_time, temperature, temp2)
+
+# beginning of program
+app = QApplication(sys.argv)
+w = MainWindow()
+w.show()
+app.exec()     
 
 
 # static variables (https://stackoverflow.com/a/279597)
