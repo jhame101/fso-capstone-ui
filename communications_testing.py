@@ -18,18 +18,21 @@ def read_values(adno: serial.Serial):
     counter = 0
     while m == None:
         text_output = adno.readline()
-        try:
-            text_output = text_output.decode("ASCII")   # wait for arduinos to send a line of text over serial, then read it in
+        try:        # to anyone who has to maintain this code later: sorry (:
+            text_output = text_output.decode("ASCII")  # wait for arduinos to send a line of text over serial, then read it in
         except:
-            split_string = b'Temp'
-            text_output = split_string + test_str.split(split_string,1)[1]
+            split_string = b'Time: '
             try:
+                text_output = split_string + text_output.split(split_string, 1)[1]
                 text_output = text_output.decode("ASCII")
             except:
+                text_output = ""
                 counter += 1
                 if counter >= 20:
                     raise Exception('Too many attempts')
-        m = re.search('Time: (?P<current_time>[\+,\-,\d,\.]+), Humidity: (?P<humidity>[\+,\-,\d,\.]+)%, Temp:(?P<temperature>[\+,\-,\d,\.]+)C, Pressure: (?P<pressure>[\+,\-,\d,\.]+)Pa, Altitude: (?P<altitude>[\+,\-,\d,\.]+)m, Temp \(BMP\): (?P<temp2>[\+,\-,\d,\.]+)C, Light: (?P<light>[\+,\-,\d,\.]+)lx, \(Roll: (?P<roll>[\+,\-,\d,\.]+), Pitch: (?P<pitch>[\+,\-,\d,\.]+), Yaw: (?P<yaw>[\+,\-,\d,\.]+)\) deg',text_output)
+        m = re.search(
+            'Time: (?P<current_time>[\+,\-,\d,\.,nan]+), Humidity: (?P<humidity>[\+,\-,\d,\.,nan]+)%, Temp: (?P<temperature>[\+,\-,\d,\.,nan]+)C, Pressure: (?P<pressure>[\+,\-,\d,\.,nan]+)Pa, Altitude: (?P<altitude>[\+,\-,\d,\.,nan]+)m, Temp \(BMP\): (?P<temp2>[\+,\-,\d,\.,nan]+)C, Light: (?P<light>[\+,\-,\d,\.,nan]+)lx, \(Roll: (?P<roll>[\+,\-,\d,\.,nan]+), Pitch: (?P<pitch>[\+,\-,\d,\.,nan]+), Yaw: (?P<yaw>[\+,\-,\d,\.]+)\) deg',
+            text_output)
     if m:
         (current_time, humidity, temperature, pressure, altitude, temp2, light, roll, pitch, yaw) = [float(g) for g in m.groups()]
     else:

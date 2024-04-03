@@ -3,3 +3,5 @@
 
 pyserial        # needed for serial communication with arduino
 numpy           # used to process large sets of data
+PyQt6           # needed for UI
+pyqtgraph       # needed for graphing
